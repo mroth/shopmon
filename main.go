@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -64,7 +65,7 @@ func main() {
 			os.Exit(0)
 		case <-ticker.C:
 			for _, handle := range cfg.ProductHandles {
-				d, err := shopify.FetchProductDetails(cfg.Domain, handle)
+				d, err := shopify.FetchProductDetails(context.TODO(), cfg.Domain, handle)
 				if err != nil {
 					log.Printf("ERROR: %+v\n", err)
 				} else {

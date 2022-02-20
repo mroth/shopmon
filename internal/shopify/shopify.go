@@ -1,9 +1,9 @@
 package shopify
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"time"
 )
@@ -82,30 +82,26 @@ type ProductImage struct {
 }
 
 // ProductDetails fetches detailed info about a product with handle
-func FetchProductDetails(domain, handle string) (*ProductDetails, error) {
-	return _fetchProductDetails(domain, handle)
-}
-
-// TODO: modify to unmarshal json while streaming
-// ALSO check http return value
-func _fetchProductDetails(storeDomain, productHandle string) (*ProductDetails, error) {
+func FetchProductDetails(ctx context.Context, storeDomain, productHandle string) (*ProductDetails, error) {
 	uri := fmt.Sprintf("https://%s/products/%v.js", storeDomain, productHandle)
-	body, err := httpFetch(uri)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
 	if err != nil {
 		return nil, err
+	}
+
+	client := http.DefaultClient
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %v", res.StatusCode)
 	}
 
 	var d ProductDetails
-	err = json.Unmarshal(body, &d)
+	decoder := json.NewDecoder(res.Body)
+	err = decoder.Decode(&d)
 	return &d, err
-}
-
-func httpFetch(uri string) ([]byte, error) {
-	resp, err := http.Get(uri)
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-	return ioutil.ReadAll(resp.Body)
 }
