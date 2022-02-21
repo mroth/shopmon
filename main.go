@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -63,13 +62,12 @@ func main() {
 				} else {
 					log.Printf("Checked %v: available %v\n", d.Title, d.Available)
 					if d.Available {
-						fullURL := fmt.Sprintf("https://%v/products/%v", cfg.Domain, d.Handle)
 						for _, n := range notifiers {
 							func() {
 								ctx, ncf := context.WithTimeout(context.Background(), cfg.NotifyTimeout)
 								defer ncf()
 
-								err := n.NotifyWithContext(ctx, d.Title, fullURL)
+								err := n.NotifyWithContext(ctx, cfg.Domain, *d)
 								if err != nil {
 									log.Printf("NOTIFICATION ERROR: %+v\n", err)
 								}
