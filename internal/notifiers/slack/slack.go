@@ -1,6 +1,7 @@
 package slack_notifier
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/slack-go/slack"
@@ -15,7 +16,11 @@ func New(webhook string) SlackNotifier {
 }
 
 func (n SlackNotifier) Notify(productName, productURL string) error {
-	return slack.PostWebhook(n.webhook, &slack.WebhookMessage{
+	return n.NotifyWithContext(context.Background(), productName, productURL)
+}
+
+func (n SlackNotifier) NotifyWithContext(ctx context.Context, productName, productURL string) error {
+	return slack.PostWebhookContext(ctx, n.webhook, &slack.WebhookMessage{
 		Username:  "ShopMon Bot",
 		IconEmoji: "convenience_store",
 		// IconURL:         "",
