@@ -15,3 +15,4 @@ RUN xx-go build -o /dist/shopmon . && \
 FROM alpine:3.15
 RUN apk add --no-cache ca-certificates
 COPY --from=xbuild /dist/shopmon /usr/local/bin/shopmon
+ENTRYPOINT ["/usr/local/bin/shopmon"]
