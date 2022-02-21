@@ -10,6 +10,7 @@ import (
 	"github.com/caarlos0/env/v6"
 	"github.com/joho/godotenv"
 
+	discord_notifier "github.com/mroth/shopmon/internal/notifiers/discord"
 	slack_notifier "github.com/mroth/shopmon/internal/notifiers/slack"
 	"github.com/mroth/shopmon/internal/shopify"
 )
@@ -19,9 +20,9 @@ type config struct {
 	ProductHandles []string      `env:"HANDLES,notEmpty" envSeparator:","` // Product handles to check, comma separated. (required)
 	Rate           uint          `env:"RATE" envDefault:"60"`              // How often to poll for products, in seconds. (default: 60)
 	SlackWebhook   string        `env:"SLACK_WEBHOOK"`                     // Slack webhook URL to post notifications. (optional)
+	DiscordWebhook string        `env:"DISCORD_WEBHOOK"`                   // Discord webhook URL to post notifications. (optional)
 	FetchTimeout   time.Duration `env:"FETCH_TIMEOUT" envDefault:"10s"`    // Timeout for fetching product details. (default: 10s)
 	NotifyTimeout  time.Duration `env:"NOTIFY_TIMEOUT" envDefault:"5s"`    // Timeout for posting a notification. (default: 5s)
-	// DiscordWebhook string   `env:"DISCORD_WEBHOOK"`
 }
 
 func main() {
@@ -40,6 +41,10 @@ func main() {
 	if cfg.SlackWebhook != "" {
 		log.Println("INFO: configuring Slack notifier")
 		notifiers = append(notifiers, slack_notifier.New(cfg.SlackWebhook))
+	}
+	if cfg.DiscordWebhook != "" {
+		log.Println("INFO: configuring Discord notifier")
+		notifiers = append(notifiers, discord_notifier.New(cfg.DiscordWebhook))
 	}
 
 	ticker := time.NewTicker(time.Second * time.Duration(cfg.Rate))
