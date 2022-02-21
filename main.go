@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"time"
 
 	"github.com/caarlos0/env/v6"
@@ -53,34 +54,50 @@ func main() {
 	interuptC := make(chan os.Signal, 1)
 	signal.Notify(interuptC, os.Interrupt)
 
+	var wg sync.WaitGroup
+	rootCtx, rootCancelF := context.WithCancel(context.Background())
+	defer rootCancelF()
+
 	for {
 		select {
 		case <-interuptC:
 			log.Println("INFO: received interrupt signal, shutting down...")
+			rootCancelF()
+			wg.Wait()
 			os.Exit(0)
 		case <-ticker.C:
 			for _, handle := range cfg.ProductHandles {
-				ctx, cf := context.WithTimeout(context.Background(), cfg.FetchTimeout)
-				d, err := shopify.FetchProductDetails(ctx, cfg.Domain, handle)
-				if err != nil {
-					log.Printf("ERROR: %+v\n", err)
-				} else {
-					log.Printf("Checked %v: available %v\n", d.Title, d.Available)
-					if d.Available {
-						for _, n := range notifiers {
-							func() {
-								ctx, ncf := context.WithTimeout(context.Background(), cfg.NotifyTimeout)
-								defer ncf()
+				handle := handle
 
-								err := n.NotifyWithContext(ctx, cfg.Domain, *d)
-								if err != nil {
-									log.Printf("NOTIFICATION ERROR: %+v\n", err)
-								}
-							}()
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					ctx, cf := context.WithTimeout(rootCtx, cfg.FetchTimeout)
+					defer cf()
+
+					d, err := shopify.FetchProductDetails(ctx, cfg.Domain, handle)
+					if err != nil {
+						log.Printf("ERROR: %+v\n", err)
+					} else {
+						log.Printf("Checked %v: available %v\n", d.Title, d.Available)
+						if d.Available {
+							for _, n := range notifiers {
+								n := n
+								wg.Add(1)
+								go func() {
+									defer wg.Done()
+									ctx, ncf := context.WithTimeout(rootCtx, cfg.NotifyTimeout)
+									defer ncf()
+
+									err := n.NotifyWithContext(ctx, cfg.Domain, *d)
+									if err != nil {
+										log.Printf("NOTIFICATION ERROR: %+v\n", err)
+									}
+								}()
+							}
 						}
 					}
-				}
-				cf() // release context timeout resources
+				}()
 			}
 		}
 	}
