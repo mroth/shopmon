@@ -16,10 +16,11 @@ import (
 )
 
 type config struct {
-	Domain         string   `env:"DOMAIN,notEmpty"`
-	ProductHandles []string `env:"HANDLES,notEmpty" envSeparator:","`
-	Rate           uint     `env:"RATE" envDefault:"60"`
-	SlackWebhook   string   `env:"SLACK_WEBHOOK"`
+	Domain         string        `env:"DOMAIN,notEmpty"`                   // Shopify domain for store. (required)
+	ProductHandles []string      `env:"HANDLES,notEmpty" envSeparator:","` // Product handles to check, comma separated. (required)
+	Rate           uint          `env:"RATE" envDefault:"60"`              // How often to poll for products, in seconds. (default: 60)
+	SlackWebhook   string        `env:"SLACK_WEBHOOK"`                     // Slack webhook URL to post notifications. (optional)
+	FetchTimeout   time.Duration `env:"FETCH_TIMEOUT" envDefault:"5s"`     // Timeout for fetching product details. (default: 5s)
 	// DiscordWebhook string   `env:"DISCORD_WEBHOOK"`
 }
 
@@ -65,7 +66,8 @@ func main() {
 			os.Exit(0)
 		case <-ticker.C:
 			for _, handle := range cfg.ProductHandles {
-				d, err := shopify.FetchProductDetails(context.TODO(), cfg.Domain, handle)
+				ctx, cf := context.WithTimeout(context.Background(), cfg.FetchTimeout)
+				d, err := shopify.FetchProductDetails(ctx, cfg.Domain, handle)
 				if err != nil {
 					log.Printf("ERROR: %+v\n", err)
 				} else {
@@ -80,6 +82,7 @@ func main() {
 						}
 					}
 				}
+				cf() // release context timeout resources
 			}
 		}
 	}
