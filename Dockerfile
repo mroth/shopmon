@@ -1,6 +1,6 @@
 FROM --platform=$BUILDPLATFORM tonistiigi/xx AS xx
 
-FROM --platform=$BUILDPLATFORM golang:1.17-alpine AS xbuild
+FROM --platform=$BUILDPLATFORM golang:1.18.0-alpine AS xbuild
 COPY --from=xx / /
 ARG TARGETPLATFORM
 ENV CGO_ENABLED=0
