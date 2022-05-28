@@ -1,4 +1,4 @@
-package discord_notifier
+package discord
 
 import (
 	"bytes"

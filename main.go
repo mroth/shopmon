@@ -5,14 +5,15 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"reflect"
 	"sync"
 	"time"
 
 	"github.com/caarlos0/env/v6"
 	"github.com/joho/godotenv"
 
-	discord_notifier "github.com/mroth/shopmon/internal/notifiers/discord"
-	slack_notifier "github.com/mroth/shopmon/internal/notifiers/slack"
+	"github.com/mroth/shopmon/internal/notifiers/discord"
+	"github.com/mroth/shopmon/internal/notifiers/slack"
 	"github.com/mroth/shopmon/internal/shopify"
 )
 
@@ -27,33 +28,33 @@ type config struct {
 }
 
 func main() {
+	// local development convenience, load .env file if exists
 	err := godotenv.Load()
 	if err == nil {
 		log.Println("INFO: loaded environment variables from local .env config file")
 	}
 
+	// parse configuration from environment
 	cfg := config{}
 	if err := env.Parse(&cfg); err != nil {
 		log.Fatalf("%+v\n", err)
 	}
 
-	var notifiers []Notifier
-	notifiers = append(notifiers, LogNotifier{})
-	if cfg.SlackWebhook != "" {
-		log.Println("INFO: configuring Slack notifier")
-		notifiers = append(notifiers, slack_notifier.New(cfg.SlackWebhook))
-	}
-	if cfg.DiscordWebhook != "" {
-		log.Println("INFO: configuring Discord notifier")
-		notifiers = append(notifiers, discord_notifier.New(cfg.DiscordWebhook))
+	// setup a NotifyGroup according to configuration
+	notifyGroup := setupNotifiers(cfg)
+	for _, n := range notifyGroup.Notifiers {
+		log.Printf("INFO: configured notifications via %v", reflect.TypeOf(n))
 	}
 
+	// ticker for update checks
 	ticker := time.NewTicker(time.Second * time.Duration(cfg.Rate))
 	defer ticker.Stop()
 
+	// capture interrupt signals for graceful shutdown
 	interuptC := make(chan os.Signal, 1)
 	signal.Notify(interuptC, os.Interrupt)
 
+	// primary event loop
 	var wg sync.WaitGroup
 	rootCtx, rootCancelF := context.WithCancel(context.Background())
 	defer rootCancelF()
@@ -62,8 +63,8 @@ func main() {
 		select {
 		case <-interuptC:
 			log.Println("INFO: received interrupt signal, shutting down...")
-			rootCancelF()
-			wg.Wait()
+			rootCancelF() // cancel in-flight checks and notifications
+			wg.Wait()     // wait for completion
 			os.Exit(0)
 		case <-ticker.C:
 			for _, handle := range cfg.ProductHandles {
@@ -81,24 +82,57 @@ func main() {
 					} else {
 						log.Printf("Checked %v: available %v\n", d.Title, d.Available)
 						if d.Available {
-							for _, n := range notifiers {
-								n := n
-								wg.Add(1)
-								go func() {
-									defer wg.Done()
-									ctx, ncf := context.WithTimeout(rootCtx, cfg.NotifyTimeout)
-									defer ncf()
-
-									err := n.NotifyWithContext(ctx, cfg.Domain, *d)
-									if err != nil {
-										log.Printf("NOTIFICATION ERROR: %+v\n", err)
-									}
-								}()
-							}
+							notifyGroup.Send(rootCtx, cfg.Domain, d)
 						}
 					}
 				}()
 			}
 		}
 	}
+}
+
+// NotifyGroup handles a collection of notifiers
+type NotifyGroup struct {
+	Notifiers []Notifier    // collection of configured notifiers
+	Timeout   time.Duration // additional timeout restriction on notify
+}
+
+// Send concurrent notifications about ProductDetails from Shopify domain to all
+// Notifiers in this NotifyGroup.  This method blocks until all notification
+// goroutines have either completed successfully, error, or timeout.
+//
+// If a notification errors for any reason, it is logged to the global logger.
+func (ng NotifyGroup) Send(ctx context.Context, domain string, d *shopify.ProductDetails) {
+	var wg sync.WaitGroup
+	for _, n := range ng.Notifiers {
+		n := n
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			ctx, cf := context.WithTimeout(ctx, ng.Timeout)
+			defer cf()
+
+			err := n.NotifyWithContext(ctx, domain, *d)
+			if err != nil {
+				log.Printf("NOTIFICATION ERROR: %+v\n", err)
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func setupNotifiers(cfg config) NotifyGroup {
+	var notifiers []Notifier
+	notifiers = append(notifiers, LogNotifier{}) // always include LogNotifier for now
+
+	if cfg.SlackWebhook != "" {
+		notifiers = append(notifiers, slack.New(cfg.SlackWebhook))
+	}
+
+	if cfg.DiscordWebhook != "" {
+		notifiers = append(notifiers, discord.New(cfg.DiscordWebhook))
+	}
+
+	return NotifyGroup{Notifiers: notifiers, Timeout: cfg.NotifyTimeout}
 }

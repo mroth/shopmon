@@ -1,4 +1,4 @@
-package slack_notifier
+package slack
 
 import (
 	"context"
