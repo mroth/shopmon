@@ -97,7 +97,7 @@ func FetchProductDetails(ctx context.Context, storeDomain, productHandle string)
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %v", res.StatusCode)
+		return nil, fmt.Errorf("unexpected status code fetching %v from %v: %v", productHandle, storeDomain, res.StatusCode)
 	}
 
 	var d ProductDetails
