@@ -11,7 +11,7 @@ RUN --mount=target=. \
     xx-go build -trimpath -ldflags "-s -w" -o /dist/shopmon . && \
     xx-verify /dist/shopmon
 
-FROM alpine:3.17
+FROM alpine:3.18
 RUN apk add --no-cache ca-certificates
 COPY --from=xbuild /dist/shopmon /usr/local/bin/shopmon
 ENTRYPOINT ["/usr/local/bin/shopmon"]
