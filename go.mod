@@ -5,7 +5,7 @@ go 1.26
 require (
 	github.com/caarlos0/env/v6 v6.10.1
 	github.com/joho/godotenv v1.5.1
-	github.com/slack-go/slack v0.32.0
+	github.com/slack-go/slack v0.35.0
 )
 
 require github.com/gorilla/websocket v1.5.3 // indirect
